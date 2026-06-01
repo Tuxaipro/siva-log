@@ -288,11 +288,8 @@
         <button class="btn" id="exportBtn" style="border-radius:14px">Download Excel</button>
 
         <div class="cloud">
-          <h2 class="cloudh">Turso cloud sync</h2>
-          <div class="cloudbtns">
-            <button class="qbtn" id="syncNow">⬆ Push to Turso</button>
-            <button class="qbtn" id="loadSheet">⬇ Pull from Turso</button>
-          </div>
+          <h2 class="cloudh">Cloud sync</h2>
+          <button class="btn ghost" id="loadSheet">⟳ Refresh from cloud</button>
           <div class="syncstatus" id="syncStatus">Connecting…</div>
         </div>
       </div>
@@ -401,18 +398,6 @@
         if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); return logout(); }
         setStatus("Saved locally — offline ("+e.message+")", "bad");
         setDot(false);
-      });
-  }
-
-  function syncAll(){
-    var recs = load();
-    if(recs.length===0){ setStatus("Nothing to sync yet", "busy"); return; }
-    setStatus("Pushing "+recs.length+" record(s)…", "busy");
-    apiPush(recs.map(toWire))
-      .then(function(){ setStatus("All "+recs.length+" record(s) pushed ✓", "ok"); setDot(true); })
-      .catch(function(e){
-        if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); return logout(); }
-        setStatus("Push failed: "+e.message, "bad"); setDot(false);
       });
   }
 
@@ -669,8 +654,7 @@
   tabHome.addEventListener("click", function(){ switchTab("home"); });
   tabExport.addEventListener("click", function(){ switchTab("export"); });
 
-  // ---- cloud sync buttons ----
-  document.getElementById("syncNow").addEventListener("click", syncAll);
+  // ---- cloud sync button ----
   document.getElementById("loadSheet").addEventListener("click", loadFromSheet);
 
   // ---- login / logout ----
