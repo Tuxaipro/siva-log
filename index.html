@@ -203,6 +203,41 @@
   .syncdot{font-family:system-ui,sans-serif;font-size:11px;margin-top:5px;color:var(--muted)}
   .syncdot.ok{color:var(--green)}
   .syncdot.bad{color:var(--rust)}
+
+  /* row affordance */
+  .row{cursor:pointer;user-select:none;-webkit-user-select:none}
+  .row:active{background:#faf5e9}
+
+  /* Mark Out confirm state */
+  .act.out.confirm{background:linear-gradient(150deg,#d94f2b,#8a3f25);animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
+
+  /* ---------- Edit modal ---------- */
+  .modal{position:fixed;inset:0;background:rgba(40,30,15,.55);display:none;
+    align-items:flex-end;justify-content:center;z-index:100;padding:0}
+  .modal.show{display:flex;animation:fadein .15s ease-out}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .sheet{width:100%;max-width:420px;background:var(--card);
+    border-radius:24px 24px 0 0;padding:24px 26px 28px;
+    box-shadow:0 -20px 40px -10px rgba(0,0,0,.25);
+    animation:slideup .2s ease-out}
+  @keyframes slideup{from{transform:translateY(40px)}to{transform:translateY(0)}}
+  .sheet h3{font-size:19px;font-weight:600;margin-bottom:4px}
+  .sheet .sd{color:var(--muted);font-family:system-ui,sans-serif;font-size:13.5px;margin-bottom:18px}
+  .trow{display:flex;gap:12px;margin-bottom:14px}
+  .tcol{flex:1}
+  .tcol label{display:block;font-family:system-ui,sans-serif;font-size:12px;
+    text-transform:uppercase;letter-spacing:1.1px;color:var(--muted);margin:0 2px 6px}
+  input[type=time]{
+    width:100%;padding:13px 12px;border:1.5px solid var(--line);border-radius:13px;
+    font-size:15px;background:#fffefb;color:var(--ink);font-family:system-ui,sans-serif;
+    outline:none;transition:border-color .15s,box-shadow .15s;
+  }
+  input[type=time]:focus{border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .mbtns{display:flex;gap:10px;margin-top:8px}
+  .mbtns .btn{flex:1;padding:14px;font-size:15px}
+  .btn.danger{background:var(--rust);color:#fff}
+  .btn.cancel{background:#fffefb;color:var(--ink);border:1.5px solid var(--line)}
 </style>
 </head>
 <body>
@@ -296,6 +331,29 @@
     </div>
   </div>
 
+  <!-- EDIT / DELETE MODAL -->
+  <div class="modal" id="editModal">
+    <div class="sheet">
+      <h3 id="editTitle">Edit record</h3>
+      <div class="sd" id="editSub">—</div>
+      <div class="trow">
+        <div class="tcol">
+          <label for="editIn">In time</label>
+          <input id="editIn" type="time">
+        </div>
+        <div class="tcol">
+          <label for="editOut">Out time</label>
+          <input id="editOut" type="time">
+        </div>
+      </div>
+      <div class="mbtns">
+        <button class="btn cancel" id="editCancel">Cancel</button>
+        <button class="btn danger" id="editDelete">Delete</button>
+        <button class="btn" id="editSave">Save</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -383,6 +441,7 @@
   function apiInit(){  return api("/api/init", {}, true); }
   function apiPull(){  return api("/api/pull", {}, true); }
   function apiPush(records){ return api("/api/push", { records: records }, true); }
+  function apiDelete(dayKey){ return api("/api/delete", { dayKey: dayKey }, true); }
 
   // local record -> wire record
   function toWire(r){
@@ -514,10 +573,11 @@
         line += "  →  …";
         pill = '<span class="pill open">Open</span>';
       }
-      html += '<div class="row"><div><div class="d">'+fmtDate(di)+
+      html += '<div class="row" data-key="'+dayKey(di)+'"><div><div class="d">'+fmtDate(di)+
               '</div><div class="meta">'+line+'</div></div>'+pill+'</div>';
     }
     listEl.innerHTML = html;
+    bindRowGestures();
   }
 
   // ---- actions ----
@@ -531,15 +591,134 @@
     pushDay(rec);
   });
 
+  // Mark Out — two-tap confirm (3s window) to prevent accidental taps
+  var outConfirmTimer = null;
+  function resetOutBtn(){
+    btnOut.classList.remove("confirm");
+    btnOut.innerHTML = 'Out<span>MARK OUT</span>';
+    if(outConfirmTimer){ clearTimeout(outConfirmTimer); outConfirmTimer = null; }
+  }
   btnOut.addEventListener("click", function(){
     var recs = load();
     var today = todayRecord(recs);
-    if(!today || today.out) return; // not in, or already out today
+    if(!today || today.out) return;
+
+    if(!btnOut.classList.contains("confirm")){
+      // first tap — arm confirm
+      btnOut.classList.add("confirm");
+      btnOut.innerHTML = 'Tap again<span>TO CONFIRM</span>';
+      outConfirmTimer = setTimeout(resetOutBtn, 3000);
+      return;
+    }
+    // second tap within 3s — really mark out
+    resetOutBtn();
     today.out = new Date().toISOString();
     save(recs);
     render();
     pushDay(today);
   });
+
+  // ---- edit / delete modal ----
+  var editModal  = document.getElementById("editModal");
+  var editTitle  = document.getElementById("editTitle");
+  var editSub    = document.getElementById("editSub");
+  var editInEl   = document.getElementById("editIn");
+  var editOutEl  = document.getElementById("editOut");
+  var editKey    = null; // dayKey of the record being edited
+
+  function timeInputVal(iso){
+    if(!iso) return "";
+    var d = new Date(iso);
+    return pad(d.getHours())+":"+pad(d.getMinutes());
+  }
+  function isoFromKeyAndTime(key, hhmm){
+    // key="YYYY-MM-DD", hhmm="HH:MM" — local time -> ISO
+    var p = key.split("-");
+    var t = hhmm.split(":");
+    var d = new Date(+p[0], +p[1]-1, +p[2], +t[0], +t[1], 0, 0);
+    return d.toISOString();
+  }
+  function openEdit(key){
+    var recs = load();
+    var rec = null;
+    for(var i=0;i<recs.length;i++){
+      if(dayKey(new Date(recs[i].in)) === key){ rec = recs[i]; break; }
+    }
+    if(!rec) return;
+    editKey = key;
+    editTitle.textContent = "Edit record";
+    editSub.textContent = fmtDate(new Date(rec.in));
+    editInEl.value  = timeInputVal(rec.in);
+    editOutEl.value = timeInputVal(rec.out);
+    editModal.classList.add("show");
+  }
+  function closeEdit(){ editModal.classList.remove("show"); editKey = null; }
+
+  editModal.addEventListener("click", function(e){
+    if(e.target === editModal) closeEdit();
+  });
+  document.getElementById("editCancel").addEventListener("click", closeEdit);
+
+  document.getElementById("editSave").addEventListener("click", function(){
+    if(!editKey) return;
+    if(!editInEl.value){ alert("In time is required."); return; }
+    var newIn  = isoFromKeyAndTime(editKey, editInEl.value);
+    var newOut = editOutEl.value ? isoFromKeyAndTime(editKey, editOutEl.value) : null;
+    if(newOut && new Date(newOut) <= new Date(newIn)){
+      alert("Out time must be after In time."); return;
+    }
+    var recs = load();
+    for(var i=0;i<recs.length;i++){
+      if(dayKey(new Date(recs[i].in)) === editKey){
+        recs[i].in = newIn; recs[i].out = newOut;
+        save(recs);
+        pushDay(recs[i]);
+        break;
+      }
+    }
+    closeEdit();
+    render();
+  });
+
+  document.getElementById("editDelete").addEventListener("click", function(){
+    if(!editKey) return;
+    if(!confirm("Delete this record? This can't be undone.")) return;
+    var key = editKey;
+    var btn = this;
+    btn.disabled = true;
+    setStatus("Deleting from cloud…", "busy");
+    // CLOUD FIRST — only remove locally after Turso confirms
+    apiDelete(key)
+      .then(function(){
+        var recs = load().filter(function(r){ return dayKey(new Date(r.in)) !== key; });
+        save(recs);
+        closeEdit();
+        render();
+        setStatus("Deleted ✓", "ok");
+        setDot(true);
+      })
+      .catch(function(e){
+        if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); logout(); return; }
+        setDot(false);
+        if(e.status === 404){
+          alert("The server doesn't know how to delete yet.\n\nRun in terminal:\n  cd worker && wrangler deploy\n\nThen try again.");
+          setStatus("Delete failed — Worker needs redeploy", "bad");
+        } else {
+          alert("Delete failed: " + e.message + "\n\nThe record is still in the cloud.");
+          setStatus("Delete failed: "+e.message, "bad");
+        }
+      })
+      .then(function(){ btn.disabled = false; });
+  });
+
+  // single tap / click on a row opens the edit modal
+  function bindRowGestures(){
+    var rows = listEl.querySelectorAll(".row");
+    rows.forEach(function(row){
+      var key = row.getAttribute("data-key");
+      row.addEventListener("click", function(){ openEdit(key); });
+    });
+  }
 
   // ---- date-range helpers for export ----
   function inputToDate(val, endOfDay){
@@ -642,6 +821,7 @@
     viewExport.style.display = home ? "none"  : "block";
     tabHome.classList.toggle("active", home);
     tabExport.classList.toggle("active", !home);
+    resetOutBtn();
     if(!home && !fromDate.value){
       // default range = last 7 days
       var today = new Date();
