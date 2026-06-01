@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>My Attendance</title>
+<meta name="description" content="Personal attendance tracker — mark in/out, export history.">
+<meta name="theme-color" content="#3a7d5d">
+<meta name="color-scheme" content="light">
+
+<!-- iOS home-screen install -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Attendance">
+<meta name="format-detection" content="telephone=no">
+
+<!-- Inline SVG favicon + apple touch icon (green check mark) -->
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%233a7d5d'/><path d='M18 33l10 10 18-22' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%233a7d5d'/><path d='M50 92l28 28 52-62' stroke='white' stroke-width='16' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+
+<!-- PWA manifest, embedded as a data URI so it stays single-file -->
+<link rel="manifest" href='data:application/manifest+json;charset=utf-8,{"name":"My Attendance","short_name":"Attendance","start_url":".","scope":".","display":"standalone","orientation":"portrait","background_color":"%23f4efe6","theme_color":"%233a7d5d","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27><rect width=%27512%27 height=%27512%27 rx=%27112%27 fill=%27%233a7d5d%27/><path d=%27M140 264l72 72 152-180%27 stroke=%27white%27 stroke-width=%2748%27 fill=%27none%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/></svg>","sizes":"any","type":"image/svg+xml","purpose":"any"}]}'>
+<style>
+  :root{
+    --bg:#f4efe6;
+    --ink:#2b2a26;
+    --muted:#8a857a;
+    --card:#fffdf8;
+    --line:#e7e0d2;
+    --green:#3a7d5d;
+    --green-soft:#e3f0e8;
+    --rust:#b5613b;
+    --rust-soft:#f6e6dc;
+    --shadow:0 18px 40px -22px rgba(60,50,30,.45);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    background:
+      radial-gradient(1200px 500px at 80% -10%, #fbf3e3 0%, transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, #efe7d6 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%;max-width:420px}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:24px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+
+  /* ---------- Login ---------- */
+  .login{padding:40px 30px 34px;text-align:center}
+  .mark{
+    width:58px;height:58px;border-radius:18px;margin:0 auto 18px;
+    background:linear-gradient(150deg,var(--green),#2c6049);
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    font-size:26px;box-shadow:0 10px 22px -10px rgba(58,125,93,.7);
+  }
+  h1{font-size:27px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:14.5px;margin-top:6px;font-family:system-ui,sans-serif}
+  form{margin-top:26px;text-align:left}
+  label{display:block;font-family:system-ui,sans-serif;font-size:12.5px;
+    text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 4px 7px}
+  .field{margin-bottom:16px}
+  input{
+    width:100%;padding:15px 16px;border:1.5px solid var(--line);
+    border-radius:14px;font-size:17px;background:#fffefb;color:var(--ink);
+    font-family:system-ui,sans-serif;outline:none;transition:border-color .15s,box-shadow .15s;
+  }
+  input:focus{border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .btn{
+    width:100%;border:none;cursor:pointer;font-family:system-ui,sans-serif;
+    font-size:16px;font-weight:600;padding:16px;border-radius:14px;
+    background:var(--ink);color:#fdfbf4;transition:transform .08s,opacity .15s;
+  }
+  .btn:active{transform:scale(.98)}
+  .err{color:var(--rust);font-family:system-ui,sans-serif;font-size:13.5px;
+    margin-top:12px;text-align:center;min-height:18px}
+
+  /* ---------- App ---------- */
+  .app{display:none}
+  .top{
+    padding:24px 26px 20px;
+    background:linear-gradient(160deg,#fffdf8,#f7f1e4);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:flex-start;justify-content:space-between;
+  }
+  .hi{font-size:13px;color:var(--muted);font-family:system-ui,sans-serif;letter-spacing:.3px}
+  .name{font-size:23px;font-weight:600;margin-top:2px}
+  .logout{background:none;border:1px solid var(--line);border-radius:10px;
+    padding:8px 12px;font-family:system-ui,sans-serif;font-size:12.5px;
+    color:var(--muted);cursor:pointer}
+  .logout:active{background:#f0eadd}
+
+  .clock{padding:26px 26px 8px;text-align:center}
+  .time{font-size:46px;font-weight:600;letter-spacing:1px;font-variant-numeric:tabular-nums}
+  .date{color:var(--muted);font-family:system-ui,sans-serif;font-size:14.5px;margin-top:4px}
+
+  .status{
+    margin:18px 26px 0;padding:14px 16px;border-radius:14px;
+    font-family:system-ui,sans-serif;font-size:14px;text-align:center;font-weight:600;
+  }
+  .status.out{background:var(--rust-soft);color:var(--rust)}
+  .status.in{background:var(--green-soft);color:var(--green)}
+
+  .actions{display:flex;gap:12px;padding:18px 26px 8px}
+  .act{
+    flex:1;border:none;cursor:pointer;font-family:system-ui,sans-serif;
+    font-size:16px;font-weight:600;padding:18px 10px;border-radius:16px;
+    transition:transform .08s,opacity .15s;display:flex;flex-direction:column;
+    align-items:center;gap:5px;line-height:1;
+  }
+  .act span{font-size:11px;font-weight:500;letter-spacing:.5px;opacity:.75}
+  .act:active{transform:scale(.97)}
+  .act:disabled{opacity:.35;cursor:not-allowed}
+  .in{background:linear-gradient(150deg,var(--green),#2c6049);color:#fff}
+  .out{background:linear-gradient(150deg,var(--rust),#974b2c);color:#fff}
+
+  .hsec{padding:8px 26px 4px;display:flex;align-items:center;justify-content:space-between}
+  .hsec h2{font-size:13px;text-transform:uppercase;letter-spacing:1.3px;
+    color:var(--muted);font-family:system-ui,sans-serif;font-weight:600}
+  .exp{background:none;border:none;color:var(--green);cursor:pointer;
+    font-family:system-ui,sans-serif;font-size:13px;font-weight:600}
+  .list{padding:6px 26px 26px;max-height:300px;overflow-y:auto}
+  .row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:13px 0;border-bottom:1px solid var(--line);
+    font-family:system-ui,sans-serif;
+  }
+  .row:last-child{border-bottom:none}
+  .row .d{font-size:14px;font-weight:600}
+  .row .meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .pill{font-size:12px;font-weight:600;padding:5px 10px;border-radius:20px;white-space:nowrap}
+  .pill.dur{background:var(--green-soft);color:var(--green)}
+  .pill.open{background:var(--rust-soft);color:var(--rust)}
+  .empty{text-align:center;color:var(--muted);font-family:system-ui,sans-serif;
+    font-size:13.5px;padding:26px 0}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;border-bottom:1px solid var(--line);background:#fbf6ec}
+  .tab{flex:1;border:none;background:none;cursor:pointer;padding:14px 0;
+    font-family:system-ui,sans-serif;font-size:14px;font-weight:600;
+    color:var(--muted);position:relative;transition:color .15s}
+  .tab.active{color:var(--ink)}
+  .tab.active::after{content:"";position:absolute;left:24%;right:24%;bottom:-1px;
+    height:3px;border-radius:3px;background:var(--green)}
+
+  /* ---------- Export pane ---------- */
+  .exportpane{padding:26px}
+  .exphint{font-family:system-ui,sans-serif;font-size:14px;color:var(--muted);
+    line-height:1.5;margin-bottom:20px}
+  .drow{display:flex;gap:12px;margin-bottom:14px}
+  .dcol{flex:1}
+  .dcol label{display:block;font-family:system-ui,sans-serif;font-size:12px;
+    text-transform:uppercase;letter-spacing:1.1px;color:var(--muted);margin:0 2px 6px}
+  input[type=date]{
+    width:100%;padding:13px 12px;border:1.5px solid var(--line);border-radius:13px;
+    font-size:15px;background:#fffefb;color:var(--ink);font-family:system-ui,sans-serif;
+    outline:none;transition:border-color .15s,box-shadow .15s;
+  }
+  input[type=date]:focus{border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .quick{display:flex;gap:8px;margin:4px 0 20px;flex-wrap:wrap}
+  .qbtn{border:1px solid var(--line);background:#fffefb;cursor:pointer;
+    padding:8px 13px;border-radius:20px;font-family:system-ui,sans-serif;
+    font-size:12.5px;color:var(--ink);transition:background .15s,border-color .15s}
+  .qbtn:active{background:var(--green-soft);border-color:var(--green)}
+  .count{font-family:system-ui,sans-serif;font-size:13.5px;color:var(--muted);
+    text-align:center;margin-bottom:16px;min-height:18px}
+  .count b{color:var(--green)}
+
+  /* ---------- Cloud sync ---------- */
+  .cloud{margin-top:26px;padding-top:22px;border-top:1px solid var(--line)}
+  .cloudh{font-size:13px;text-transform:uppercase;letter-spacing:1.3px;
+    color:var(--muted);font-family:system-ui,sans-serif;font-weight:600;margin-bottom:14px}
+  .cloud label{display:block;font-family:system-ui,sans-serif;font-size:12px;
+    text-transform:uppercase;letter-spacing:1.1px;color:var(--muted);margin:0 2px 6px}
+  .cloud input{width:100%;padding:13px 12px;border:1.5px solid var(--line);border-radius:13px;
+    font-size:14px;background:#fffefb;color:var(--ink);font-family:system-ui,sans-serif;
+    outline:none;margin-bottom:10px;transition:border-color .15s,box-shadow .15s}
+  .cloud input:focus{border-color:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .btn.ghost{background:#fffefb;color:var(--ink);border:1.5px solid var(--line);font-size:14px;padding:13px}
+  .cloudbtns{display:flex;gap:8px;margin-top:12px}
+  .cloudbtns .qbtn{flex:1;text-align:center;padding:12px 8px;font-size:13px}
+  .syncstatus{font-family:system-ui,sans-serif;font-size:12.5px;color:var(--muted);
+    text-align:center;margin-top:14px;min-height:18px}
+  .syncstatus.ok{color:var(--green)}
+  .syncstatus.bad{color:var(--rust)}
+  .syncstatus.busy{color:var(--muted)}
+
+  /* header sync dot */
+  .syncdot{font-family:system-ui,sans-serif;font-size:11px;margin-top:5px;color:var(--muted)}
+  .syncdot.ok{color:var(--green)}
+  .syncdot.bad{color:var(--rust)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <div class="login">
+      <div class="mark">✓</div>
+      <h1>My Attendance</h1>
+      <p class="sub">Sign in to mark your day</p>
+      <form id="loginForm" autocomplete="off">
+        <div class="field">
+          <label for="mobile">Mobile number</label>
+          <input id="mobile" type="tel" inputmode="numeric" value="9597075342" placeholder="9597075342" maxlength="10">
+        </div>
+        <div class="field">
+          <label for="pin">PIN</label>
+          <input id="pin" type="password" inputmode="numeric" placeholder="••••" maxlength="4">
+        </div>
+        <button class="btn" type="submit">Sign in</button>
+        <div class="err" id="err"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div class="card app" id="appCard">
+    <div class="top">
+      <div>
+        <div class="hi">Welcome back</div>
+        <div class="name">Hello 👋</div>
+        <div class="syncdot" id="syncDot"></div>
+      </div>
+      <button class="logout" id="logout">Log out</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabHome" data-view="home">Home</button>
+      <button class="tab" id="tabExport" data-view="export">Export</button>
+    </div>
+
+    <!-- HOME VIEW -->
+    <div id="viewHome">
+      <div class="clock">
+        <div class="time" id="clockTime">--:--</div>
+        <div class="date" id="clockDate">—</div>
+      </div>
+
+      <div class="status" id="statusBox">—</div>
+
+      <div class="actions">
+        <button class="act in" id="markIn">In<span>MARK IN</span></button>
+        <button class="act out" id="markOut">Out<span>MARK OUT</span></button>
+      </div>
+
+      <div class="hsec">
+        <h2>Last 7 days</h2>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+
+    <!-- EXPORT VIEW -->
+    <div id="viewExport" style="display:none">
+      <div class="exportpane">
+        <p class="exphint">Choose a date range and download all records as an Excel file.</p>
+        <div class="drow">
+          <div class="dcol">
+            <label for="fromDate">From</label>
+            <input id="fromDate" type="date">
+          </div>
+          <div class="dcol">
+            <label for="toDate">To</label>
+            <input id="toDate" type="date">
+          </div>
+        </div>
+        <div class="quick">
+          <button class="qbtn" data-range="7">Last 7 days</button>
+          <button class="qbtn" data-range="30">Last 30 days</button>
+          <button class="qbtn" data-range="month">This month</button>
+        </div>
+        <div class="count" id="rangeCount">—</div>
+        <button class="btn" id="exportBtn" style="border-radius:14px">Download Excel</button>
+
+        <div class="cloud">
+          <h2 class="cloudh">Turso cloud sync</h2>
+          <div class="cloudbtns">
+            <button class="qbtn" id="syncNow">⬆ Push to Turso</button>
+            <button class="qbtn" id="loadSheet">⬇ Pull from Turso</button>
+          </div>
+          <div class="syncstatus" id="syncStatus">Connecting…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- API config ----
+  // Auth (mobile/PIN) and the Turso token now live in the Cloudflare Worker.
+  // This page only knows the Worker URL and a short-lived session token.
+  var API_URL = "https://siva-log-api.tuxaipro.workers.dev";
+
+  var KEY_REC = "att_records_v1";
+  var KEY_SESSION = "att_loggedin_v1";
+  var KEY_TOKEN = "att_token_v1";
+
+  // ---- elements ----
+  var loginCard = document.getElementById("loginCard");
+  var appCard   = document.getElementById("appCard");
+  var form      = document.getElementById("loginForm");
+  var errEl     = document.getElementById("err");
+  var clockTime = document.getElementById("clockTime");
+  var clockDate = document.getElementById("clockDate");
+  var statusBox = document.getElementById("statusBox");
+  var btnIn     = document.getElementById("markIn");
+  var btnOut    = document.getElementById("markOut");
+  var listEl    = document.getElementById("list");
+  var fromDate  = document.getElementById("fromDate");
+  var toDate    = document.getElementById("toDate");
+  var rangeCount= document.getElementById("rangeCount");
+  var syncStatus= document.getElementById("syncStatus");
+  var syncDot   = document.getElementById("syncDot");
+
+  // ---- storage helpers ----
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(KEY_REC)) || []; }
+    catch(e){ return []; }
+  }
+  function save(arr){
+    localStorage.setItem(KEY_REC, JSON.stringify(arr));
+  }
+
+  // ================= Cloudflare Worker API =================
+  function setStatus(msg, kind){
+    if(syncStatus){
+      syncStatus.textContent = msg;
+      syncStatus.className = "syncstatus" + (kind ? " "+kind : "");
+    }
+  }
+  function setDot(ok){
+    if(!syncDot) return;
+    syncDot.textContent = ok ? "☁ Connected" : "☁ Offline";
+    syncDot.className = "syncdot " + (ok ? "ok" : "bad");
+  }
+
+  function getToken(){ return localStorage.getItem(KEY_TOKEN) || ""; }
+  function setToken(t){
+    if(t) localStorage.setItem(KEY_TOKEN, t);
+    else  localStorage.removeItem(KEY_TOKEN);
+  }
+
+  // Call the worker. Adds Bearer token if `auth` is true.
+  function api(path, body, auth){
+    var headers = { "Content-Type": "application/json" };
+    if(auth) headers["Authorization"] = "Bearer " + getToken();
+    return fetch(API_URL + path, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(body || {})
+    }).then(function(res){
+      return res.json().then(function(data){
+        if(!res.ok){
+          var err = new Error((data && data.error) || ("HTTP "+res.status));
+          err.status = res.status;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function apiLogin(mobile, pin){
+    return api("/api/login", { mobile: mobile, pin: pin }, false)
+      .then(function(d){ setToken(d.token); return d; });
+  }
+  function apiInit(){  return api("/api/init", {}, true); }
+  function apiPull(){  return api("/api/pull", {}, true); }
+  function apiPush(records){ return api("/api/push", { records: records }, true); }
+
+  // local record -> wire record
+  function toWire(r){
+    var di = new Date(r.in);
+    return { dayKey: dayKey(di), in: r.in, out: r.out || null };
+  }
+
+  function pushDay(localRec){
+    setStatus("Saving…", "busy");
+    apiPush([toWire(localRec)])
+      .then(function(){ setStatus("Saved ✓", "ok"); setDot(true); })
+      .catch(function(e){
+        if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); return logout(); }
+        setStatus("Saved locally — offline ("+e.message+")", "bad");
+        setDot(false);
+      });
+  }
+
+  function syncAll(){
+    var recs = load();
+    if(recs.length===0){ setStatus("Nothing to sync yet", "busy"); return; }
+    setStatus("Pushing "+recs.length+" record(s)…", "busy");
+    apiPush(recs.map(toWire))
+      .then(function(){ setStatus("All "+recs.length+" record(s) pushed ✓", "ok"); setDot(true); })
+      .catch(function(e){
+        if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); return logout(); }
+        setStatus("Push failed: "+e.message, "bad"); setDot(false);
+      });
+  }
+
+  function loadFromSheet(){
+    setStatus("Loading…", "busy");
+    apiPull()
+      .then(function(data){
+        var recs = (data.records || []).map(function(s){
+          return { in: s.in, out: s.out || null };
+        });
+        recs.sort(function(a,b){ return new Date(a.in) - new Date(b.in); });
+        save(recs);
+        render();
+        setStatus("Loaded "+recs.length+" record(s) ✓", "ok");
+        setDot(true);
+      })
+      .catch(function(e){
+        if(e.status === 401){ setStatus("Session expired — please log in again", "bad"); return logout(); }
+        setStatus("Load failed: "+e.message, "bad"); setDot(false);
+      });
+  }
+
+  // ---- date/time formatting ----
+  function pad(n){ return n<10 ? "0"+n : ""+n; }
+  function fmtTime(d){
+    var h=d.getHours(), m=pad(d.getMinutes());
+    var ap = h>=12 ? "PM":"AM";
+    var hh = h%12; if(hh===0) hh=12;
+    return hh+":"+m+" "+ap;
+  }
+  function fmtDate(d){
+    var days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    var mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return days[d.getDay()]+", "+d.getDate()+" "+mon[d.getMonth()]+" "+d.getFullYear();
+  }
+  function dayKey(d){
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  }
+
+  // ---- live clock ----
+  function tick(){
+    var now=new Date();
+    clockTime.textContent = fmtTime(now);
+    clockDate.textContent = fmtDate(now);
+  }
+
+  // ---- today's record (one per day) ----
+  function todayRecord(recs){
+    var todayKey = dayKey(new Date());
+    for(var i=recs.length-1;i>=0;i--){
+      if(dayKey(new Date(recs[i].in)) === todayKey) return recs[i];
+    }
+    return null;
+  }
+
+  // ---- is a date within the last 7 days (incl. today) ----
+  function withinLast7(d){
+    var start = new Date();
+    start.setHours(0,0,0,0);
+    start.setDate(start.getDate() - 6); // today + previous 6 days
+    return d >= start;
+  }
+
+  // ---- duration text ----
+  function durationText(inISO, outISO){
+    var ms = new Date(outISO) - new Date(inISO);
+    if(ms<0) ms=0;
+    var mins = Math.round(ms/60000);
+    var h = Math.floor(mins/60), m = mins%60;
+    if(h>0) return h+"h "+m+"m";
+    return m+"m";
+  }
+
+  // ---- render ----
+  function render(){
+    var recs = load();
+    var today = todayRecord(recs);
+
+    if(!today){
+      statusBox.className = "status out";
+      statusBox.textContent = "Not marked in yet today";
+      btnIn.disabled = false;
+      btnOut.disabled = true;
+    } else if(!today.out){
+      statusBox.className = "status in";
+      statusBox.textContent = "● Marked IN at "+fmtTime(new Date(today.in));
+      btnIn.disabled = true;
+      btnOut.disabled = false;
+    } else {
+      statusBox.className = "status in";
+      statusBox.textContent = "✓ Done today · "+fmtTime(new Date(today.in))+
+                              " → "+fmtTime(new Date(today.out))+
+                              "  ("+durationText(today.in,today.out)+")";
+      btnIn.disabled = true;
+      btnOut.disabled = true;
+    }
+
+    // history — last 7 days only, most recent first
+    var recent = recs.filter(function(r){ return withinLast7(new Date(r.in)); });
+    if(recent.length===0){
+      listEl.innerHTML = '<div class="empty">No records in the last 7 days.</div>';
+      return;
+    }
+    var html = "";
+    for(var i=recent.length-1;i>=0;i--){
+      var r = recent[i];
+      var di = new Date(r.in);
+      var line = fmtTime(di);
+      var pill;
+      if(r.out){
+        line += "  →  "+fmtTime(new Date(r.out));
+        pill = '<span class="pill dur">'+durationText(r.in,r.out)+'</span>';
+      } else {
+        line += "  →  …";
+        pill = '<span class="pill open">Open</span>';
+      }
+      html += '<div class="row"><div><div class="d">'+fmtDate(di)+
+              '</div><div class="meta">'+line+'</div></div>'+pill+'</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  // ---- actions ----
+  btnIn.addEventListener("click", function(){
+    var recs = load();
+    if(todayRecord(recs)) return; // already marked in today
+    var rec = { in: new Date().toISOString(), out: null };
+    recs.push(rec);
+    save(recs);
+    render();
+    pushDay(rec);
+  });
+
+  btnOut.addEventListener("click", function(){
+    var recs = load();
+    var today = todayRecord(recs);
+    if(!today || today.out) return; // not in, or already out today
+    today.out = new Date().toISOString();
+    save(recs);
+    render();
+    pushDay(today);
+  });
+
+  // ---- date-range helpers for export ----
+  function inputToDate(val, endOfDay){
+    // val = "YYYY-MM-DD"
+    var p = val.split("-");
+    var d = new Date(+p[0], +p[1]-1, +p[2]);
+    if(endOfDay) d.setHours(23,59,59,999); else d.setHours(0,0,0,0);
+    return d;
+  }
+  function dateToInput(d){
+    return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  }
+  function recordsInRange(){
+    var recs = load();
+    if(!fromDate.value || !toDate.value) return null;
+    var from = inputToDate(fromDate.value, false);
+    var to   = inputToDate(toDate.value, true);
+    if(from > to){ var t=from; from=to; to=t; } // tolerate reversed
+    return recs.filter(function(r){
+      var di = new Date(r.in);
+      return di >= from && di <= to;
+    });
+  }
+  function updateCount(){
+    var sel = recordsInRange();
+    if(sel===null){ rangeCount.textContent = "Pick a From and To date."; return; }
+    rangeCount.innerHTML = "<b>"+sel.length+"</b> record"+(sel.length===1?"":"s")+" in this range";
+  }
+
+  fromDate.addEventListener("change", updateCount);
+  toDate.addEventListener("change", updateCount);
+
+  // quick range buttons
+  Array.prototype.forEach.call(document.querySelectorAll(".qbtn"), function(b){
+    b.addEventListener("click", function(){
+      var today = new Date();
+      var from;
+      if(b.dataset.range === "month"){
+        from = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else {
+        var days = parseInt(b.dataset.range,10);
+        from = new Date(); from.setDate(today.getDate() - (days-1));
+      }
+      fromDate.value = dateToInput(from);
+      toDate.value   = dateToInput(today);
+      updateCount();
+    });
+  });
+
+  // ---- export Excel (.xls) — selected date range ----
+  document.getElementById("exportBtn").addEventListener("click", function(){
+    var sel = recordsInRange();
+    if(sel===null){ alert("Please choose both From and To dates."); return; }
+    if(sel.length===0){ alert("No records found in this date range."); return; }
+
+    var bodyRows = "";
+    sel.forEach(function(r){
+      var di = new Date(r.in);
+      bodyRows +=
+        "<tr>"+
+          "<td>"+fmtDate(di)+"</td>"+
+          "<td>"+fmtTime(di)+"</td>"+
+          "<td>"+(r.out ? fmtTime(new Date(r.out)) : "")+"</td>"+
+          "<td>"+(r.out ? durationText(r.in,r.out) : "")+"</td>"+
+        "</tr>";
+    });
+
+    var table =
+      '<table border="1"><thead><tr>'+
+        '<th>Date</th><th>In time</th><th>Out time</th><th>Duration</th>'+
+      '</tr></thead><tbody>'+bodyRows+'</tbody></table>';
+
+    var html =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" '+
+      'xmlns:x="urn:schemas-microsoft-com:office:excel" '+
+      'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8">'+
+      '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>'+
+      '<x:ExcelWorksheet><x:Name>Attendance</x:Name><x:WorksheetOptions>'+
+      '<x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>'+
+      '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'+
+      '</head><body>'+table+'</body></html>';
+
+    var blob = new Blob([html], {type:"application/vnd.ms-excel"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "attendance_"+fromDate.value+"_to_"+toDate.value+".xls";
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  });
+
+  // ---- tab switching ----
+  var viewHome = document.getElementById("viewHome");
+  var viewExport = document.getElementById("viewExport");
+  var tabHome = document.getElementById("tabHome");
+  var tabExport = document.getElementById("tabExport");
+  function switchTab(view){
+    var home = view === "home";
+    viewHome.style.display   = home ? "block" : "none";
+    viewExport.style.display = home ? "none"  : "block";
+    tabHome.classList.toggle("active", home);
+    tabExport.classList.toggle("active", !home);
+    if(!home && !fromDate.value){
+      // default range = last 7 days
+      var today = new Date();
+      var from = new Date(); from.setDate(today.getDate()-6);
+      fromDate.value = dateToInput(from);
+      toDate.value = dateToInput(today);
+    }
+    if(!home) updateCount();
+  }
+  tabHome.addEventListener("click", function(){ switchTab("home"); });
+  tabExport.addEventListener("click", function(){ switchTab("export"); });
+
+  // ---- cloud sync buttons ----
+  document.getElementById("syncNow").addEventListener("click", syncAll);
+  document.getElementById("loadSheet").addEventListener("click", loadFromSheet);
+
+  // ---- login / logout ----
+  function showApp(){
+    loginCard.style.display = "none";
+    appCard.style.display = "block";
+    setStatus("Connecting…", "busy");
+    tick();
+    render();
+    // ensure schema exists, then pull latest records
+    apiInit()
+      .then(function(){ setDot(true); loadFromSheet(); })
+      .catch(function(e){
+        if(e.status === 401){ return logout(); }
+        setDot(false);
+        setStatus("Offline: "+e.message, "bad");
+      });
+  }
+  function showLogin(){
+    appCard.style.display = "none";
+    loginCard.style.display = "block";
+  }
+  function logout(){
+    setToken("");
+    localStorage.removeItem(KEY_SESSION);
+    document.getElementById("pin").value = "";
+    showLogin();
+  }
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    var m = document.getElementById("mobile").value.trim();
+    var p = document.getElementById("pin").value.trim();
+    errEl.textContent = "Signing in…";
+    apiLogin(m, p)
+      .then(function(){
+        errEl.textContent = "";
+        localStorage.setItem(KEY_SESSION, "1");
+        showApp();
+      })
+      .catch(function(err){
+        if(err.status === 401) errEl.textContent = "Wrong mobile number or PIN.";
+        else                   errEl.textContent = "Sign-in failed: " + err.message;
+      });
+  });
+
+  document.getElementById("logout").addEventListener("click", logout);
+
+  // ---- start ----
+  setInterval(tick, 1000);
+  tick();
+  // resume previous session only if both flag AND token are present
+  if(localStorage.getItem(KEY_SESSION)==="1" && getToken()){ showApp(); }
+})();
+</script>
+</body>
+</html>
